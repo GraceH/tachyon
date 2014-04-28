@@ -53,6 +53,11 @@ public class WorkerConf extends Utils {
   public final int WORKER_CHECKPOINT_THREADS;
 
   public final int WORKER_PER_THREAD_CHECKPOINT_CAP_MB_SEC;
+  
+  // hierarchy storage
+  public final int MAX_HIERARCHY_STORAGE_LEVEL = 4;
+  public final String[] STORAGE_LEVEL_DIRS = new String[MAX_HIERARCHY_STORAGE_LEVEL];
+  public final String[] STORAGE_LEVEL_DIR_QUOTA = new String[MAX_HIERARCHY_STORAGE_LEVEL];
 
   private WorkerConf() {
     MASTER_HOSTNAME = getProperty("tachyon.master.hostname", "localhost");
@@ -76,5 +81,11 @@ public class WorkerConf extends Utils {
     WORKER_CHECKPOINT_THREADS = getIntProperty("tachyon.worker.checkpoint.threads", 1);
     WORKER_PER_THREAD_CHECKPOINT_CAP_MB_SEC =
         getIntProperty("tachyon.worker.per.thread.checkpoint.cap.mb.sec", 1000);
+    
+    // hierarchy storage
+    for (int i = 0; i < MAX_HIERARCHY_STORAGE_LEVEL; i ++) {
+      STORAGE_LEVEL_DIRS[i] = getProperty("tachyon.data.level" + (i + 1) + ".dir");
+      STORAGE_LEVEL_DIR_QUOTA[i] = getProperty("tachyon.data.level" + (i + 1) + ".dir.quota");
+    }
   }
 }

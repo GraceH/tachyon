@@ -1,6 +1,8 @@
 package tachyon.worker;
 
+import java.io.IOException;
 import java.util.List;
+import java.util.Random;
 
 import org.apache.thrift.TException;
 
@@ -37,33 +39,61 @@ public class StorageTier {
    * @return
    * @throws TException
    */
-  public StorageDir requestSpace(long userId, long requestBytes) throws TException {
-    return null;
+  public StorageDir requestSpace(long requestBytes) throws TException {
+    Random rand = new Random(System.currentTimeMillis());
+    int  n = rand.nextInt(mMaxStorageLevel);
+    StorageDir availableDir = null;
+    for(int i = n, j = 0 ; j < mMaxStorageLevel; i++, j++) {
+      if(mStorageDirFreeSpace[i] > requestBytes) {
+        availableDir = mStorageDirs[i];
+        mStorageDirFreeSpace[i] += requestBytes;
+        break;
+      }
+    }
+    return availableDir;
   }
-  
+
   /**
    * Find the storageDir for certain blockId
+   * 
    * @param blockId
    * @return
+   * @throws IOException
    */
-  public StorageDir getStorageDir(long blockId) {
-    return null;
+  public StorageDir getStorageDir(long blockId) throws IOException {
+    StorageDir foundDir = null;
+    for (StorageDir dir : mStorageDirs) {
+      if (dir.existsBlock(blockId)) {
+        foundDir = dir;
+      }
+    }
+    return foundDir;
   }
-  
+
   /**
    * Return the storage file for certain blockId
+   * 
    * @param blockId
    * @return
+   * @throws IOException
    */
-  public String getStorageFile(long blockId) {
+  public String getStorageFile(long blockId) throws IOException {
+    StorageDir foundDir = getStorageDir(blockId);
+    if (foundDir != null) {
+      return foundDir.getFilePath(blockId);
+    }
     return null;
   }
 
-  private long freeBlock(long blockId) {
-    return 0;
+  private boolean freeBlock(long blockId) throws IOException {
+    StorageDir foundDir = getStorageDir(blockId);
+    if (foundDir != null) {
+      return foundDir.deleteBlock(blockId);
+    }
+    return false;
   }
 
-  public void freeBlocks(List<Long> blocks) {
+  public void freeBlocks(List<Long> blocks) throws IOException {
     for (long blockId : blocks) {
       freeBlock(blockId);
     }
@@ -75,13 +105,20 @@ public class StorageTier {
    * 
    * @param requestBytes
    * @return
+   * @throws IOException 
+   * @throws TException 
    */
-  public boolean storageTierEviction(long requestBytes) {
+  public boolean storageTierEviction(long blockId) throws IOException, TException {
     // TODO add more elimination algorithm
+    StorageDir foundDir = getStorageDir(blockId);
     if (mNextStorageTier != null) {
       // to evict to the next level
+      long requestBytes = foundDir.getBlockLength(blockId);
+      StorageDir dst = mNextStorageTier.requestSpace(requestBytes);
+      foundDir.moveBlock(blockId, dst);
     } else {
       // if last level storage tier, just free the storage space
+      foundDir.deleteBlock(blockId);
     }
     return false;
   }

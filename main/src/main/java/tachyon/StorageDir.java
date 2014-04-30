@@ -49,15 +49,26 @@ abstract public class StorageDir {
    */
   private boolean _copyBlock(long blockid, StorageDir dst) throws IOException {
     StorageBlockReader sbr = getBlockReader(this, blockid);
-    int len = getBlockLength(blockid);
+    long len = getBlockLength(blockid);
     ByteBuffer bf = sbr.readByteBuffer(0, len);
     StorageBlockWriter sbw = dst.getBlockWriter(this, blockid);
-    return sbw.appendCurrentBuffer(bf.array(), 0, len) > 0;
+    return sbw.appendCurrentBuffer(bf.array(), 0, (int)len) > 0;
   }
   
-  public int getBlockLength(long blockid) throws IOException {
+  //TODO move this function to another generic super class for both StorageBlockReader|Writer
+  public long getBlockLength(long blockid) throws IOException {
     String blockfile = getFilePath(blockid);
-    return (int) UnderFileSystem.get(blockfile).getFileSize(blockfile);
+    return UnderFileSystem.get(blockfile).getFileSize(blockfile);
+  }
+  
+  public boolean existsBlock(long blockid) throws IOException {
+    String blockfile = getFilePath(blockid);
+    return UnderFileSystem.get(blockfile).exists(blockfile);
+  }
+  
+  public boolean deleteBlock(long blockid) throws IOException {
+    String blockfile = getFilePath(blockid);
+    return UnderFileSystem.get(blockfile).delete(blockfile, true);
   }
 
   public boolean moveBlock(long blockid, StorageDir dst) throws IOException {
@@ -86,7 +97,7 @@ abstract public class StorageDir {
       _copyBlock(blockid, dst);
     }
     return isCopySuccess;
-  }
+  }  
 
   /**
    * @param args

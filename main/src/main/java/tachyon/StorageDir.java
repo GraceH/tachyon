@@ -3,6 +3,11 @@ package tachyon;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+import tachyon.client.StorageBlockReader;
+import tachyon.client.StorageBlockReaderLocalFS;
+import tachyon.client.StorageBlockWriter;
+import tachyon.client.StorageBlockWriterLocalFS;
+
 /**
  * Storage directory management
  * 
@@ -10,20 +15,49 @@ import java.nio.ByteBuffer;
 abstract public class StorageDir {
   public String mStorageDirName = null;
 
-  /**
-   * Write the output data onto the file under the current storage directory
-   */
-  public abstract int appendCurrentBuffer(long blockid, byte[] buf, int offset, int length)
-      throws IOException;
+  public StorageBlockWriter getBlockWriter(StorageDir storage, long blockid) throws IOException {
+    if (mStorageDirName.startsWith("hdfs://") || mStorageDirName.startsWith("s3://")
+        || mStorageDirName.startsWith("s3n://")) {
+      //TODO
+      return null;
+    } else {
+      return new StorageBlockWriterLocalFS(storage, blockid);
+    }
+    
+  }
 
-  /**
-   * Read the input data from the file under the current storage directory
-   */
-  public abstract ByteBuffer readByteBuffer(long blockid, int offset, int length)
-      throws IOException;
+  public StorageBlockReader getBlockReader(StorageDir storage, long blockid) {
+    if (mStorageDirName.startsWith("hdfs://") || mStorageDirName.startsWith("s3://")
+        || mStorageDirName.startsWith("s3n://")) {
+      //TODO
+      return null;
+    } else {
+      return new StorageBlockReaderLocalFS(storage, blockid);
+    }
+  }
 
   public String getFilePath(long blockid) {
     return mStorageDirName + Constants.PATH_SEPARATOR + blockid;
+  }
+  
+  /**
+   * Copy block files across different storage layers.
+   * @param blockid
+   * @param dst
+   * @return
+   * @throws IOException
+   */
+  private boolean _copyBlock(long blockid, StorageDir dst) throws IOException {
+    StorageBlockReader sbr = getBlockReader(this, blockid);
+    int len = getBlockLength(blockid);
+    ByteBuffer bf = sbr.readByteBuffer(0, len);
+    StorageBlockWriter sbw = dst.getBlockWriter(this, blockid);
+    return sbw.appendCurrentBuffer(bf.array(), 0, len) > 0;
+  }
+  
+  public int getBlockLength(long blockid) throws IOException {
+    String blockfile = getFilePath(blockid);
+    return (int) UnderFileSystem.get(blockfile).getFileSize(blockfile);
   }
 
   public boolean moveBlock(long blockid, StorageDir dst) throws IOException {
@@ -35,11 +69,11 @@ abstract public class StorageDir {
     if (srcUfs.getClass().equals(dstUfs.getClass())) {
       isCopySuccess = srcUfs.rename(srcFile, dstFile);
     } else {
-      //TODO read from src and write to the dst.
+      _copyBlock(blockid, dst);
     }
     return isCopySuccess && srcUfs.delete(srcFile, true);
   }
-  
+
   public boolean copyBlock(long blockid, StorageDir dst) throws IOException {
     boolean isCopySuccess = false;
     String srcFile = getFilePath(blockid);
@@ -49,7 +83,7 @@ abstract public class StorageDir {
     if (srcUfs.getClass().equals(dstUfs.getClass())) {
       isCopySuccess = srcUfs.rename(srcFile, dstFile);
     } else {
-      //TODO read from src and write to the dst.
+      _copyBlock(blockid, dst);
     }
     return isCopySuccess;
   }
